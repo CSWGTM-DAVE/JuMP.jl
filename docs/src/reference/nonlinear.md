@@ -39,7 +39,20 @@ Nonlinear.delete
 ## [User-defined operators](@id nonlinear_api_operators)
 
 ```@docs
+Nonlinear.OperatorRegistry
+Nonlinear.DEFAULT_UNIVARIATE_OPERATORS
+Nonlinear.DEFAULT_MULTIVARIATE_OPERATORS
 Nonlinear.register_operator
+Nonlinear.register_operator_if_needed
+Nonlinear.assert_registered
+Nonlinear.check_return_type
+Nonlinear.eval_univariate_function
+Nonlinear.eval_univariate_gradient
+Nonlinear.eval_univariate_hessian
+Nonlinear.eval_multivariate_function
+Nonlinear.eval_multivariate_gradient
+Nonlinear.eval_logic_operator
+Nonlinear.eval_comparison_operator
 ```
 
 ## Automatic-differentiation backends
@@ -49,4 +62,13 @@ Nonlinear.AbstractAutomaticDifferentiation
 Nonlinear.Default
 Nonlinear.SparseReverseMode
 Nonlinear.set_differentiation_backend
+```
+
+## Data-structure
+
+```@docs
+Nonlinear.Node
+Nonlinear.NodeType
+Nonlinear.NonlinearExpression
+Nonlinear.adjacency_matrix
 ```

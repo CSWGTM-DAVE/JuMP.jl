@@ -278,7 +278,7 @@ function MOI.eval_hessian_lagrangian_product(data::NonlinearData, H, x, v, Ïƒ, Î
 end
 
 """
-    _adjacency_matrix(nodes::Vector{Node})
+    adjacency_matrix(nodes::Vector{Node})
 
 Compute the sparse adjacency matrix describing the parent-child relationships in
 `nodes`.
@@ -287,7 +287,7 @@ The element `(i, j)` is `true` if there is an edge *from* `node[j]` to
 `node[i]`. Since we get a column-oriented matrix, this gives us a fast way to
 look up the edges leaving any node (i.e., the children).
 """
-function _adjacency_matrix(nodes::Vector{Node})
+function adjacency_matrix(nodes::Vector{Node})
     N = length(nodes)
     I, J = Vector{Int}(undef, N), Vector{Int}(undef, N)
     numnz = 0
@@ -313,7 +313,7 @@ function evaluate(
     expr = data[index]
     storage = zeros(length(expr.nodes))
 
-    adj = _adjacency_matrix(expr.nodes)
+    adj = adjacency_matrix(expr.nodes)
     children_arr = SparseArrays.rowvals(adj)
     operators = data.operators
     # An arbitrary limit on the potential input size of a multivariate
@@ -366,6 +366,7 @@ function evaluate(
                 lhs = children_arr[children_idx[r-1]]
                 rhs = children_arr[children_idx[r]]
                 result &= eval_comparison_function(
+                    operators,
                     operators.comparison_operators[node.index],
                     storage[lhs],
                     storage[rhs],
@@ -378,6 +379,7 @@ function evaluate(
             lhs = children_arr[children_idx[1]]
             rhs = children_arr[children_idx[2]]
             storage[k] = eval_logic_function(
+                operators,
                 operators.logic_operators[node.index],
                 storage[lhs] == 1,
                 storage[rhs] == 1,

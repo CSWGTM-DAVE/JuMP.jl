@@ -567,25 +567,29 @@ function test_eval_multivariate_function_registered_grad()
 end
 
 function test_eval_logic_function()
+    r = Nonlinear.OperatorRegistry()
     for lhs in (true, false), rhs in (true, false)
-        @test Nonlinear.eval_logic_function(:&&, lhs, rhs) == (lhs && rhs)
-        @test Nonlinear.eval_logic_function(:||, lhs, rhs) == (lhs || rhs)
+        @test Nonlinear.eval_logic_function(r, :&&, lhs, rhs) == (lhs && rhs)
+        @test Nonlinear.eval_logic_function(r, :||, lhs, rhs) == (lhs || rhs)
         @test_throws(
             AssertionError,
-            Nonlinear.eval_logic_function(:⊻, lhs, rhs),
+            Nonlinear.eval_logic_function(r, :⊻, lhs, rhs),
         )
     end
     return
 end
 
 function test_eval_comprison_function()
+    r = Nonlinear.OperatorRegistry()
     for lhs in (true, false), rhs in (true, false)
-        @test Nonlinear.eval_comparison_function(:<=, lhs, rhs) == (lhs <= rhs)
-        @test Nonlinear.eval_comparison_function(:>=, lhs, rhs) == (lhs >= rhs)
-        @test Nonlinear.eval_comparison_function(:(==), lhs, rhs) ==
+        @test Nonlinear.eval_comparison_function(r, :<=, lhs, rhs) ==
+              (lhs <= rhs)
+        @test Nonlinear.eval_comparison_function(r, :>=, lhs, rhs) ==
+              (lhs >= rhs)
+        @test Nonlinear.eval_comparison_function(r, :(==), lhs, rhs) ==
               (lhs == rhs)
-        @test Nonlinear.eval_comparison_function(:<, lhs, rhs) == (lhs < rhs)
-        @test Nonlinear.eval_comparison_function(:>, lhs, rhs) == (lhs > rhs)
+        @test Nonlinear.eval_comparison_function(r, :<, lhs, rhs) == (lhs < rhs)
+        @test Nonlinear.eval_comparison_function(r, :>, lhs, rhs) == (lhs > rhs)
         @test_throws(
             AssertionError,
             Nonlinear.eval_comparison_function(:⊻, lhs, rhs),

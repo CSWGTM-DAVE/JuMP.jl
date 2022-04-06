@@ -45,17 +45,17 @@ let exprs = map(SYMBOLIC_UNIVARIATE_EXPRESSIONS) do arg
     end
 end
 
-struct UnivariateOperator{F,F′,F′′}
+struct _UnivariateOperator{F,F′,F′′}
     f::F
     f′::F′
     f′′::F′′
 end
 
-struct MultivariateOperator{F,F′}
+struct _MultivariateOperator{F,F′}
     N::Int
     f::F
     ∇f::F′
-    function MultivariateOperator{N}(f::Function, ∇f::Function) where {N}
+    function _MultivariateOperator{N}(f::Function, ∇f::Function) where {N}
         return new{typeof(f),typeof(∇f)}(N, f, ∇f)
     end
 end
@@ -74,17 +74,25 @@ The list of multivariate operators that are supported by default.
 """
 const DEFAULT_MULTIVARIATE_OPERATORS = [:+, :-, :*, :^, :/, :ifelse]
 
+
+
+"""
+    OperatorRegistry()
+
+Create a new `OperatorRegistry` to store and evaluate univariate and
+multivariate operators.
+"""
 struct OperatorRegistry
     # NODE_CALL_UNIVARIATE
     univariate_operators::Vector{Symbol}
     univariate_operator_to_id::Dict{Symbol,Int}
     univariate_user_operator_start::Int
-    registered_univariate_operators::Vector{UnivariateOperator}
+    registered_univariate_operators::Vector{_UnivariateOperator}
     # NODE_CALL_MULTIVARIATE
     multivariate_operators::Vector{Symbol}
     multivariate_operator_to_id::Dict{Symbol,Int}
     multivariate_user_operator_start::Int
-    registered_multivariate_operators::Vector{MultivariateOperator}
+    registered_multivariate_operators::Vector{_MultivariateOperator}
     # NODE_LOGIC
     logic_operators::Vector{Symbol}
     logic_operator_to_id::Dict{Symbol,Int}
@@ -103,14 +111,14 @@ struct OperatorRegistry
                 op => i for (i, op) in enumerate(univariate_operators)
             ),
             length(univariate_operators),
-            UnivariateOperator[],
+            _UnivariateOperator[],
             # NODE_CALL
             multivariate_operators,
             Dict{Symbol,Int}(
                 op => i for (i, op) in enumerate(multivariate_operators)
             ),
             length(multivariate_operators),
-            MultivariateOperator[],
+            _MultivariateOperator[],
             # NODE_LOGIC
             logic_operators,
             Dict{Symbol,Int}(op => i for (i, op) in enumerate(logic_operators)),
@@ -249,24 +257,24 @@ function _validate_register_assumptions(
     return
 end
 
-function UnivariateOperator(op::Symbol, f::Function)
+function _UnivariateOperator(op::Symbol, f::Function)
     _validate_register_assumptions(f, op, 1)
     f′ = _checked_derivative(f, op)
     f′′ = _checked_derivative(f′, op)
-    return UnivariateOperator(f, f′, f′′)
+    return _UnivariateOperator(f, f′, f′′)
 end
 
-function UnivariateOperator(op::Symbol, f::Function, f′::Function)
+function _UnivariateOperator(op::Symbol, f::Function, f′::Function)
     _validate_register_assumptions(f′, op, 1)
     f′′ = _checked_derivative(f′, op)
-    return UnivariateOperator(f, f′, f′′)
+    return _UnivariateOperator(f, f′, f′′)
 end
 
-function UnivariateOperator(::Symbol, f::Function, f′::Function, f′′::Function)
-    return UnivariateOperator(f, f′, f′′)
+function _UnivariateOperator(::Symbol, f::Function, f′::Function, f′′::Function)
+    return _UnivariateOperator(f, f′, f′′)
 end
 
-function MultivariateOperator{N}(op::Symbol, f::Function) where {N}
+function _MultivariateOperator{N}(op::Symbol, f::Function) where {N}
     _validate_register_assumptions(f, op, N)
     g = x -> f(x...)
     ∇f = function (ret, x)
@@ -277,11 +285,11 @@ function MultivariateOperator{N}(op::Symbol, f::Function) where {N}
         end
         return
     end
-    return MultivariateOperator{N}(g, ∇f)
+    return _MultivariateOperator{N}(g, ∇f)
 end
 
-function MultivariateOperator{N}(::Symbol, f::Function, ∇f::Function) where {N}
-    return MultivariateOperator{N}(x -> f(x...), (g, x) -> ∇f(g, x...))
+function _MultivariateOperator{N}(::Symbol, f::Function, ∇f::Function) where {N}
+    return _MultivariateOperator{N}(x -> f(x...), (g, x) -> ∇f(g, x...))
 end
 
 function register_operator(
@@ -296,7 +304,7 @@ function register_operator(
         elseif haskey(registry.multivariate_operator_to_id, op)
             error("Operator $op is already registered.")
         end
-        operator = UnivariateOperator(op, f...)
+        operator = _UnivariateOperator(op, f...)
         push!(registry.univariate_operators, op)
         push!(registry.registered_univariate_operators, operator)
         registry.univariate_operator_to_id[op] =
@@ -307,7 +315,7 @@ function register_operator(
         elseif haskey(registry.univariate_operator_to_id, op)
             error("Operator $op is already registered.")
         end
-        operator = MultivariateOperator{nargs}(op, f...)
+        operator = _MultivariateOperator{nargs}(op, f...)
         push!(registry.multivariate_operators, op)
         push!(registry.registered_multivariate_operators, operator)
         registry.multivariate_operator_to_id[op] =
@@ -341,7 +349,18 @@ function _warn_auto_register(op::Symbol, nargs::Int)
     return
 end
 
-function register_if_needed(
+"""
+    register_operator_if_needed(
+        registry::OperatorRegistry,
+        op::Symbol,
+        nargs::Int,
+        f::Function;
+    )
+
+Similar to [`register_operator`](@ref), but this function warns if the function
+is not registered, and skips silently if it already is.
+"""
+function register_operator_if_needed(
     registry::OperatorRegistry,
     op::Symbol,
     nargs::Int,
@@ -354,6 +373,11 @@ function register_if_needed(
     return
 end
 
+"""
+    assert_registered(registry::OperatorRegistry, op::Symbol, nargs::Int)
+
+Throw an error if `op` is not registered in `registry` with `nargs` arguments.
+"""
 function assert_registered(registry::OperatorRegistry, op::Symbol, nargs::Int)
     if !_is_registered(registry, op, nargs)
         msg = """
@@ -373,6 +397,12 @@ function assert_registered(registry::OperatorRegistry, op::Symbol, nargs::Int)
     return
 end
 
+"""
+    check_return_type(::Type{T}, ret::S) where {T,S}
+
+Overload this method for new types `S` to throw an informative error if a
+user-defined function returns the type `S` instead of `T`.
+"""
 check_return_type(::Type{T}, ret::T) where {T} = nothing
 
 function check_return_type(::Type{T}, ret) where {T}
@@ -382,6 +412,16 @@ function check_return_type(::Type{T}, ret) where {T}
     )
 end
 
+"""
+    eval_univariate_function(
+        registry::OperatorRegistry,
+        op::Symbol,
+        x::T,
+    ) where {T}
+
+Evaluate the operator `op(x)::T`, where `op` is a univariate function in
+`registry`.
+"""
 function eval_univariate_function(
     registry::OperatorRegistry,
     op::Symbol,
@@ -399,6 +439,16 @@ function eval_univariate_function(
     return ret::T
 end
 
+"""
+    eval_univariate_gradient(
+        registry::OperatorRegistry,
+        op::Symbol,
+        x::T,
+    ) where {T}
+
+Evaluate the first-derivative of the operator `op(x)::T`, where `op` is a
+univariate function in `registry`.
+"""
 function eval_univariate_gradient(
     registry::OperatorRegistry,
     op::Symbol,
@@ -416,6 +466,16 @@ function eval_univariate_gradient(
     return ret::T
 end
 
+"""
+    eval_univariate_hessian(
+        registry::OperatorRegistry,
+        op::Symbol,
+        x::T,
+    ) where {T}
+
+Evaluate the second-derivative of the operator `op(x)::T`, where `op` is a
+univariate function in `registry`.
+"""
 function eval_univariate_hessian(
     registry::OperatorRegistry,
     op::Symbol,
@@ -432,17 +492,31 @@ function eval_univariate_hessian(
     return ret::T
 end
 
+"""
+    eval_multivariate_function(
+        registry::OperatorRegistry,
+        op::Symbol,
+        x::AbstractVector{T},
+    ) where {T}
+
+Evaluate the operator `op(x)::T`, where `op` is a multivariate function in
+`registry`.
+"""
 function eval_multivariate_function(
     registry::OperatorRegistry,
     op::Symbol,
     x::AbstractVector{T},
 )::T where {T}
     if op == :+
-        return +(x...)
+        return sum(x)
     elseif op == :-
-        return -(x...)
+        ret = x[1]
+        for i in 2:length(x)
+            ret -= x[i]
+        end
+        return ret
     elseif op == :*
-        return *(x...)
+        return prod(x)
     elseif op == :^
         @assert length(x) == 2
         return x[1]^x[2]
@@ -462,19 +536,31 @@ function eval_multivariate_function(
     return ret::T
 end
 
+"""
+    eval_multivariate_gradient(
+        registry::OperatorRegistry,
+        op::Symbol,
+        g::AbstractVector{T},
+        x::AbstractVector{T},
+    ) where {T}
+
+Evaluate the gradient of operator `g .= ∇op(x)`, where `op` is a multivariate
+function in `registry`.
+"""
 function eval_multivariate_gradient(
     registry::OperatorRegistry,
     op::Symbol,
     g::AbstractVector{T},
     x::AbstractVector{T},
 ) where {T}
+    @assert length(g) == length(x0)
     if op == :+
         fill!(g, one(T))
     elseif op == :-
         fill!(g, -one(T))
         g[1] = one(T)
     elseif op == :*
-        total = *(x...)
+        total = prod(x)
         if total == zero(T)
             for i in 1:length(x)
                 g[i] = prod(x[j] for j in 1:length(x) if i != j)
@@ -527,8 +613,22 @@ function eval_multivariate_hessian(
     return error("Not implemented")
 end
 
-# These are not extendable!
-function eval_logic_function(op::Symbol, lhs::T, rhs::T)::Bool where {T}
+"""
+    eval_logic_function(
+        registry::OperatorRegistry,
+        op::Symbol,
+        lhs::T,
+        rhs::T,
+    )::Bool where {T}
+
+Evaluate `(lhs op rhs)::Bool`, where `op` is a logic operator in `registry`.
+"""
+function eval_logic_function(
+    ::OperatorRegistry,
+    op::Symbol,
+    lhs::T,
+    rhs::T,
+)::Bool where {T}
     if op == :&&
         return lhs && rhs
     else
@@ -537,8 +637,23 @@ function eval_logic_function(op::Symbol, lhs::T, rhs::T)::Bool where {T}
     end
 end
 
-# These are not extendable!
-function eval_comparison_function(op::Symbol, lhs::T, rhs::T)::Bool where {T}
+"""
+    eval_comparison_function(
+        registry::OperatorRegistry,
+        op::Symbol,
+        lhs::T,
+        rhs::T,
+    )::Bool where {T}
+
+Evaluate `(lhs op rhs)::Bool`, where `op` is a comparison operator in
+`registry`.
+"""
+function eval_comparison_function(
+    ::OperatorRegistry,
+    op::Symbol,
+    lhs::T,
+    rhs::T,
+)::Bool where {T}
     if op == :<=
         return lhs <= rhs
     elseif op == :>=
