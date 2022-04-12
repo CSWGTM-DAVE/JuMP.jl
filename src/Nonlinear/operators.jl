@@ -553,7 +553,7 @@ function eval_multivariate_gradient(
     g::AbstractVector{T},
     x::AbstractVector{T},
 ) where {T}
-    @assert length(g) == length(x0)
+    @assert length(g) == length(x)
     if op == :+
         fill!(g, one(T))
     elseif op == :-
