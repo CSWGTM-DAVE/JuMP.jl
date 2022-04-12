@@ -74,8 +74,6 @@ The list of multivariate operators that are supported by default.
 """
 const DEFAULT_MULTIVARIATE_OPERATORS = [:+, :-, :*, :^, :/, :ifelse]
 
-
-
 """
     OperatorRegistry()
 

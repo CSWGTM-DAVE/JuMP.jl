@@ -27,20 +27,20 @@ function _precompile_()
             SubArray{Float64,1,Vector{Float64},Tuple{UnitRange{Int64}},true},
             Vector{Float64},
         },
-     )
-     Base.precompile(
+    )
+    Base.precompile(
         Tuple{
             typeof(MOI.eval_constraint),
             NLPEvaluator,
             SubArray{Float64,1,Vector{Float64},Tuple{UnitRange{Int64}},true},
             Vector{Float64},
-         },
-     )
-     Base.precompile(Tuple{typeof(MOI.jacobian_structure),NLPEvaluator})
-     Base.precompile(
-         Tuple{typeof(MOI.eval_objective),NLPEvaluator,Vector{Float64}},
-     )
-     return
+        },
+    )
+    Base.precompile(Tuple{typeof(MOI.jacobian_structure),NLPEvaluator})
+    Base.precompile(
+        Tuple{typeof(MOI.eval_objective),NLPEvaluator,Vector{Float64}},
+    )
+    return
 end
 
 _precompile_()
