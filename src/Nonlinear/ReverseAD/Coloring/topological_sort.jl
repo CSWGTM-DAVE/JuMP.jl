@@ -48,32 +48,28 @@ function depth_first_visit_impl!(
     while !isempty(vertex_stack)
         u = pop!(vertex_stack)
         out_idx = pop!(index_stack)
-        #uegs = out_edges(u,graph)
         len_uegs = offsets[u+1] - offsets[u]
         found_new_vertex = false
-
         while out_idx <= len_uegs && !found_new_vertex
             v = adjlist[offsets[u]+out_idx-1]
             out_idx += 1
             v_color = vertexcolormap[v]
-
             if v_color == 0
                 found_new_vertex = true
                 vertexcolormap[v] = 1
                 push!(vertex_stack, u)
                 push!(index_stack, out_idx)
                 visitor.parents[v] = u
-
                 push!(vertex_stack, v)
                 push!(index_stack, 1)
             end
         end
-
         if !found_new_vertex
             close_vertex!(visitor, u)
             vertexcolormap[u] = 2
         end
     end
+    return
 end
 
 function traverse_graph(
@@ -86,12 +82,10 @@ function traverse_graph(
     index_stack,
 )
     vertexcolormap[s] = 1
-
     resize!(vertex_stack, 1)
     vertex_stack[1] = s
     resize!(index_stack, 1)
     index_stack[1] = 1
-
     return depth_first_visit_impl!(
         adjlist,
         offsets,
@@ -117,7 +111,6 @@ function reverse_topological_sort_by_dfs(
     @assert length(cmap) == num_vertices
     fill!(cmap, 0)
     visitor = TopologicalSortVisitor(num_vertices)
-
     for s in 1:num_vertices
         if cmap[s] == 0
             traverse_graph(
@@ -131,6 +124,5 @@ function reverse_topological_sort_by_dfs(
             )
         end
     end
-
     return visitor.vertices, visitor.parents
 end

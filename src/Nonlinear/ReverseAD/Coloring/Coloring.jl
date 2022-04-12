@@ -4,15 +4,6 @@ import DataStructures
 
 include("topological_sort.jl")
 
-# workaround for slow tuples
-struct MyPair{T}
-    first::T
-    second::T
-end
-
-# workaround for julia issue #10208
-Base.hash(x::MyPair{Int}, h::UInt) = hash(x.first, hash(x.second, h))
-
 # indexed sparse set of integers
 mutable struct IndexedSet
     nzidx::Vector{Int}
@@ -54,20 +45,13 @@ end
 
 Base.collect(v::IndexedSet) = v.nzidx[1:v.nnz]
 
-function Base.union!(v::IndexedSet, s)
-    for x in s
-        push!(v, x)
-    end
-    return
-end
-
 # compact storage for an undirected graph
 # neighbors of vertex i start at adjlist[offsets[i]]
 struct UndirectedGraph
     adjlist::Vector{Int}
     edgeindex::Vector{Int} # corresponding edge number, indexed as adjlist
     offsets::Vector{Int}
-    edges::Vector{MyPair{Int}}
+    edges::Vector{Tuple{Int,Int}}
 end
 
 num_vertices(g::UndirectedGraph) = length(g.offsets) - 1
@@ -97,7 +81,7 @@ function gen_adjlist(I, J, nel)
         offsets[k+1] = offsets[k] + adjcount[k]
     end
     fill!(adjcount, 0)
-    edges = Array{MyPair{Int}}(undef, n_edges)
+    edges = Array{Tuple{Int,Int}}(undef, n_edges)
     adjlist = Array{Int}(undef, offsets[nel+1] - 1)
     edgeindex = Array{Int}(undef, length(adjlist))
     edge_count = 0
@@ -114,7 +98,7 @@ function gen_adjlist(I, J, nel)
         adjlist[offsets[j]+adjcount[j]] = i
         edgeindex[offsets[j]+adjcount[j]] = edge_count
         adjcount[j] += 1
-        edges[edge_count] = MyPair(i, j)
+        edges[edge_count] = (i, j)
     end
     @assert edge_count == n_edges
     return UndirectedGraph(adjlist, edgeindex, offsets, edges)
@@ -125,9 +109,6 @@ struct Edge
     source::Int
     target::Int
 end
-
-# convert to lower triangular indices, using Pairs
-normalize(i, j) = (j > i) ? (j, i) : (i, j)
 
 function prevent_cycle(
     v,
@@ -308,9 +289,7 @@ function recovery_preprocess(
     # count of edges in each subgraph
     edge_count = Int[]
     for k in 1:length(g.edges)
-        e = g.edges[k]
-        u = e.first
-        v = e.second
+        u, v = g.edges[k]
         i = min(color[u], color[v])
         j = max(color[u], color[v])
         if twocolorindex[i, j] == 0
@@ -322,19 +301,17 @@ function recovery_preprocess(
         edge_count[idx] += 1
     end
     # edges sorted by twocolor subgraph
-    sorted_edges = Array{Vector{MyPair{Int}}}(undef, seen_twocolors)
+    sorted_edges = Array{Vector{Tuple{Int,Int}}}(undef, seen_twocolors)
     for idx in 1:seen_twocolors
-        sorted_edges[idx] = MyPair{Int}[]
+        sorted_edges[idx] = Tuple{Int,Int}[]
         sizehint!(sorted_edges[idx], edge_count[idx])
     end
     for i in 1:length(g.edges)
-        e = g.edges[i]
-        u = e.first
-        v = e.second
+        u, v = g.edges[i]
         i = min(color[u], color[v])
         j = max(color[u], color[v])
         idx = twocolorindex[i, j]
-        push!(sorted_edges[idx], MyPair(u, v))
+        push!(sorted_edges[idx], (u, v))
     end
     # list of unique vertices in each twocolor subgraph
     vertexmap = Array{Vector{Int}}(undef, seen_twocolors)
@@ -349,9 +326,7 @@ function recovery_preprocess(
         vlist = Int[]
         # build up the vertex list and adjacency count
         for k in 1:length(my_edges)
-            e = my_edges[k]
-            u = e.first
-            v = e.second
+            u, v = my_edges[k]
             # seen these vertices yet?
             if revmap[u] == 0
                 push!(vlist, u)
@@ -379,9 +354,7 @@ function recovery_preprocess(
         vec = Array{Int}(undef, offset[length(vlist)+1] - 1)
         # now fill in
         for k in 1:length(my_edges)
-            e = my_edges[k]
-            u = e.first
-            v = e.second
+            u, v = my_edges[k]
             u_rev = revmap[u] # indices in the subgraph
             v_rev = revmap[v]
             vec[offset[u_rev]+adjcount[u]] = v_rev
@@ -410,6 +383,8 @@ function recovery_preprocess(
     )
 end
 
+_normalize(i, j) = (j > i) ? (j, i) : (i, j)
+
 function indirect_recover_structure(rinfo::RecoveryInfo)
     N = length(rinfo.color)
     I = zeros(Int, rinfo.nnz + N)
@@ -429,9 +404,8 @@ function indirect_recover_structure(rinfo::RecoveryInfo)
             if p == 0
                 continue
             end
-            i, j = normalize(vmap[v], vmap[p])
             k += 1
-            I[k], J[k] = i, j
+            I[k], J[k] = _normalize(vmap[v], vmap[p])
         end
     end
     @assert k == rinfo.nnz + N
