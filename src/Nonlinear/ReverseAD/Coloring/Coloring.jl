@@ -27,7 +27,7 @@ function Base.push!(v::IndexedSet, i::Integer)
         v.nzidx[v.nnz+=1] = i
         v.empty[i] = false
     end
-    return nothing
+    return
 end
 
 function Base.empty!(v::IndexedSet)
@@ -36,10 +36,12 @@ function Base.empty!(v::IndexedSet)
     for i in 1:v.nnz
         empty[nzidx[i]] = true
     end
-    return v.nnz = 0
+    v.nnz = 0
+    return v
 end
 
 Base.length(v::IndexedSet) = length(v.nzidx)
+
 function Base.resize!(v::IndexedSet, n::Integer)
     if n > length(v)
         @assert v.nnz == 0 # only resize empty vector
@@ -47,14 +49,16 @@ function Base.resize!(v::IndexedSet, n::Integer)
         resize!(v.empty, n)
         fill!(v.empty, true)
     end
+    return
 end
 
 Base.collect(v::IndexedSet) = v.nzidx[1:v.nnz]
+
 function Base.union!(v::IndexedSet, s)
     for x in s
         push!(v, x)
     end
-    return nothing
+    return
 end
 
 # compact storage for an undirected graph
@@ -65,9 +69,13 @@ struct UndirectedGraph
     offsets::Vector{Int}
     edges::Vector{MyPair{Int}}
 end
+
 num_vertices(g::UndirectedGraph) = length(g.offsets) - 1
+
 num_edges(g::UndirectedGraph) = length(g.edges)
+
 num_neighbors(i::Int, g::UndirectedGraph) = g.offsets[i+1] - g.offsets[i]
+
 start_neighbors(i::Int, g::UndirectedGraph) = g.offsets[i]
 
 function gen_adjlist(I, J, nel)
@@ -76,7 +84,9 @@ function gen_adjlist(I, J, nel)
     for k in 1:length(I)
         i = I[k]
         j = J[k]
-        i == j && continue
+        if i == j
+            continue
+        end
         n_edges += 1
         adjcount[i] += 1
         adjcount[j] += 1
@@ -87,29 +97,26 @@ function gen_adjlist(I, J, nel)
         offsets[k+1] = offsets[k] + adjcount[k]
     end
     fill!(adjcount, 0)
-
     edges = Array{MyPair{Int}}(undef, n_edges)
     adjlist = Array{Int}(undef, offsets[nel+1] - 1)
     edgeindex = Array{Int}(undef, length(adjlist))
     edge_count = 0
-
     for k in 1:length(I)
         i = I[k]
         j = J[k]
-        i == j && continue
+        if i == j
+            continue
+        end
         edge_count += 1
         adjlist[offsets[i]+adjcount[i]] = j
         edgeindex[offsets[i]+adjcount[i]] = edge_count
         adjcount[i] += 1
-
         adjlist[offsets[j]+adjcount[j]] = i
         edgeindex[offsets[j]+adjcount[j]] = edge_count
         adjcount[j] += 1
-
         edges[edge_count] = MyPair(i, j)
     end
-    @assert edge_count == n_edges
-
+    @assert edge_count == n_edge
     return UndirectedGraph(adjlist, edgeindex, offsets, edges)
 end
 
@@ -121,15 +128,6 @@ end
 
 # convert to lower triangular indices, using Pairs
 normalize(i, j) = (j > i) ? (j, i) : (i, j)
-function normalize_p(p::MyPair)
-    return (p.second > p.first) ? MyPair(p.second, p.first) :
-           MyPair(p.first, p.second)
-end
-normalize_p(i, j) = normalize_p(MyPair(i, j))
-
-macro colored(i)
-    return esc(:((color[$i] != 0)))
-end
 
 function prevent_cycle(
     v,
@@ -151,19 +149,18 @@ function prevent_cycle(
     elseif q != w
         forbiddenColors[color[x]] = v
     end
-    return nothing
+    return
 end
 
 function grow_star(v, w, e_idx, firstNeighbor, color, S)
     @inbounds e = firstNeighbor[color[w]]
     p = e.source
-    q = e.target
     @inbounds if p != v
         firstNeighbor[color[w]] = Edge(e_idx, v, w)
     else
         union!(S, e_idx, e.index)
     end
-    return nothing
+    return
 end
 
 function merge_trees(eg, eg1, S)
@@ -172,7 +169,7 @@ function merge_trees(eg, eg1, S)
     if e1 != e2
         union!(S, eg, eg1)
     end
-    return nothing
+    return
 end
 
 # acyclic coloring algorithm of Gebremdehin, Tarafdar, Manne, and Pothen
@@ -189,25 +186,30 @@ function acyclic_coloring(g::UndirectedGraph)
     color = fill(0, num_vertices(g))
     # disjoint set forest of edges in the graph
     S = DataStructures.IntDisjointSets(num_edges(g))
-
     @inbounds for v in 1:num_vertices(g)
         n_neighbor = num_neighbors(v, g)
         start_neighbor = start_neighbors(v, g)
         for k in 0:(n_neighbor-1)
             w = g.adjlist[start_neighbor+k]
-            @colored(w) || continue
+            if color[w] == 0
+                continue
+            end
             forbiddenColors[color[w]] = v
         end
         for k in 0:(n_neighbor-1)
             w = g.adjlist[start_neighbor+k]
             e_idx = g.edgeindex[start_neighbor+k]
-            @colored(w) || continue
+            if color[w] == 0
+                continue
+            end
             n_neighbor_w = num_neighbors(w, g)
             start_neighbor_w = start_neighbors(w, g)
             for k2 in 0:(n_neighbor_w-1)
                 x = g.adjlist[start_neighbor_w+k2]
                 e2_idx = g.edgeindex[start_neighbor_w+k2]
-                @colored(x) || continue
+                if color[x] == 0
+                    continue
+                end
                 if forbiddenColors[color[x]] != v
                     prevent_cycle(
                         v,
@@ -223,7 +225,6 @@ function acyclic_coloring(g::UndirectedGraph)
                 end
             end
         end
-
         # find feasible color
         found = false
         for k in 1:num_colors
@@ -239,30 +240,34 @@ function acyclic_coloring(g::UndirectedGraph)
             push!(firstNeighbor, Edge(0, 0, 0))
             color[v] = num_colors
         end
-
         for k in 0:(n_neighbor-1)
             w = g.adjlist[start_neighbor+k]
             e_idx = g.edgeindex[start_neighbor+k]
-            @colored(w) || continue
+            if color[w] == 0
+                continue
+            end
             grow_star(v, w, e_idx, firstNeighbor, color, S)
         end
         for k in 0:(n_neighbor-1)
             w = g.adjlist[start_neighbor+k]
             e_idx = g.edgeindex[start_neighbor+k]
-            @colored(w) || continue
+            if color[w] == 0
+                continue
+            end
             n_neighbor_w = num_neighbors(w, g)
             start_neighbor_w = start_neighbors(w, g)
             for k2 in 0:(n_neighbor_w-1)
                 x = g.adjlist[start_neighbor_w+k2]
                 e2_idx = g.edgeindex[start_neighbor_w+k2]
-                (@colored(x) && x != v) || continue
+                if color[x] == 0 || x == v
+                    continue
+                end
                 if color[x] == color[v]
                     merge_trees(e_idx, e2_idx, S)
                 end
             end
         end
     end
-
     return color, num_colors
 end
 
@@ -297,7 +302,6 @@ function recovery_preprocess(
     # represent two-color subgraph as:
     # list of vertices (with map to global indices)
     # adjacency list in a single vector (with list of offsets)
-
     # linear index of pair of colors
     twocolorindex = zeros(Int32, num_colors, num_colors)
     seen_twocolors = 0
@@ -323,7 +327,6 @@ function recovery_preprocess(
         sorted_edges[idx] = MyPair{Int}[]
         sizehint!(sorted_edges[idx], edge_count[idx])
     end
-
     for i in 1:length(g.edges)
         e = g.edges[i]
         u = e.first
@@ -333,26 +336,17 @@ function recovery_preprocess(
         idx = twocolorindex[i, j]
         push!(sorted_edges[idx], MyPair(u, v))
     end
-
     # list of unique vertices in each twocolor subgraph
     vertexmap = Array{Vector{Int}}(undef, seen_twocolors)
-
     postorder = Array{Vector{Int}}(undef, seen_twocolors)
     parents = Array{Vector{Int}}(undef, seen_twocolors)
-
     # temporary lookup map from global index to subgraph index
     revmap = zeros(Int, num_vertices(g))
-
     adjcount = zeros(Int, num_vertices(g))
-
     cmap = zeros(Int, 0) # shared storage for DFS
-    vertex_stack = Int[]
-    index_stack = Int[]
-
     for idx in 1:seen_twocolors
         my_edges = sorted_edges[idx]
         vlist = Int[]
-
         # build up the vertex list and adjacency count
         for k in 1:length(my_edges)
             e = my_edges[k]
@@ -372,7 +366,6 @@ function recovery_preprocess(
             adjcount[u] += 1
             adjcount[v] += 1
         end
-
         # set up offsets for adjlist
         offset = Array{Int}(undef, length(vlist) + 1)
         offset[1] = 1
@@ -384,36 +377,28 @@ function recovery_preprocess(
         # vec[offset[u]]
         # u has global index vlist[u]
         vec = Array{Int}(undef, offset[length(vlist)+1] - 1)
-
         # now fill in
         for k in 1:length(my_edges)
             e = my_edges[k]
             u = e.first
             v = e.second
-
             u_rev = revmap[u] # indices in the subgraph
             v_rev = revmap[v]
             vec[offset[u_rev]+adjcount[u]] = v_rev
             vec[offset[v_rev]+adjcount[v]] = u_rev
-
             adjcount[u] += 1
             adjcount[v] += 1
         end
-
         resize!(cmap, length(vlist))
         order, parent =
             reverse_topological_sort_by_dfs(vec, offset, length(vlist), cmap)
-
         for k in 1:length(vlist)
-            # clear for reuse
-            revmap[vlist[k]] = 0
+            revmap[vlist[k]] = 0  # clear for reuse
         end
-
         postorder[idx] = order
         parents[idx] = parent
         vertexmap[idx] = vlist
     end
-
     return RecoveryInfo(
         vertexmap,
         postorder,
@@ -427,39 +412,29 @@ end
 
 function indirect_recover_structure(rinfo::RecoveryInfo)
     N = length(rinfo.color)
-    nnz = rinfo.nnz
-
-    I = zeros(Int, nnz + N)
-    J = zeros(Int, nnz + N)
-
-    # diagonal entries
+    I = zeros(Int, rinfo.nnz + N)
+    J = zeros(Int, rinfo.nnz + N)
     k = 0
     for i in 1:N
         k += 1
-        I[k] = i
-        J[k] = i
+        I[k] = J[k] = i
     end
-
     for t in 1:length(rinfo.postorder)
         vmap = rinfo.vertexmap[t]
         order = rinfo.postorder[t]
         parent = rinfo.parents[t]
-
         for z in 1:length(order)
             v = order[z]
             p = parent[v]
-            (p == 0) && continue
-            i = vmap[v]
-            j = vmap[p]
-            i, j = normalize(i, j)
+            if p == 0
+                continue
+            end
+            i, j = normalize(vmap[v], vmap[p])
             k += 1
-            I[k] = i
-            J[k] = j
+            I[k], J[k] = i, j
         end
     end
-
-    @assert k == nnz + N
-
+    @assert k == rinfo.nnz + N
     return I, J
 end
 
@@ -470,8 +445,7 @@ function hessian_color_preprocess(
     seen_idx = IndexedSet(0),
 )
     resize!(seen_idx, num_total_var)
-    I = Int[]
-    J = Int[]
+    I, J = Int[], Int[]
     for (i, j) in edgelist
         push!(seen_idx, i)
         push!(seen_idx, j)
@@ -480,7 +454,6 @@ function hessian_color_preprocess(
     end
     local_indices = sort!(seen_idx.nzidx[1:seen_idx.nnz])
     empty!(seen_idx)
-
     global_to_local_idx = seen_idx.nzidx # steal for storage
     for k in 1:length(local_indices)
         global_to_local_idx[local_indices[k]] = k
@@ -490,23 +463,16 @@ function hessian_color_preprocess(
         I[k] = global_to_local_idx[I[k]]
         J[k] = global_to_local_idx[J[k]]
     end
-
     g = gen_adjlist(I, J, length(local_indices))
-
     color, num_colors = acyclic_coloring(g)
-
     @assert length(color) == num_vertices(g)
-
     rinfo = recovery_preprocess(g, color, num_colors, local_indices)
-
     I, J = indirect_recover_structure(rinfo)
-    #nnz = num_edges(g)
     # convert back to global indices
     for k in 1:length(I)
         I[k] = local_indices[I[k]]
         J[k] = local_indices[J[k]]
     end
-
     return I, J, rinfo
 end
 
@@ -550,7 +516,8 @@ function recover_from_matmat!(
             @inbounds stored_values[z] = 0.0
         end
         @inbounds for z in 1:length(order)
-            v, p = order[z], parent[v]
+            v = order[z]
+            p = parent[v]
             if p == 0
                 continue
             end
