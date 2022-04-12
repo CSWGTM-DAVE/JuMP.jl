@@ -116,7 +116,7 @@ function gen_adjlist(I, J, nel)
         adjcount[j] += 1
         edges[edge_count] = MyPair(i, j)
     end
-    @assert edge_count == n_edge
+    @assert edge_count == n_edges
     return UndirectedGraph(adjlist, edgeindex, offsets, edges)
 end
 
