@@ -506,7 +506,7 @@ function eval_multivariate_function(
     x::AbstractVector{T},
 )::T where {T}
     if op == :+
-        return sum(x)
+        return sum(x; init = zero(T))
     elseif op == :-
         ret = x[1]
         for i in 2:length(x)
@@ -514,7 +514,7 @@ function eval_multivariate_function(
         end
         return ret
     elseif op == :*
-        return prod(x)
+        return prod(x; init = one(T))
     elseif op == :^
         @assert length(x) == 2
         return x[1]^x[2]
