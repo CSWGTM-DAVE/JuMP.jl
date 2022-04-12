@@ -558,14 +558,22 @@ function eval_multivariate_gradient(
         fill!(g, -one(T))
         g[1] = one(T)
     elseif op == :*
-        total = prod(x)
-        if total == zero(T)
-            for i in 1:length(x)
-                g[i] = prod(x[j] for j in 1:length(x) if i != j)
-            end
+        # Special case performance optimizations for common cases.
+        if length(x) == 1
+            g[1] = T(1)
+        elseif length(x) == 2
+            g[1] = x[2]
+            g[2] = x[1]
         else
-            for i in 1:length(x)
-                g[i] = total / x[i]
+            total = prod(x)
+            if total == zero(T)
+                for i in 1:length(x)
+                    g[i] = prod(x[j] for j in 1:length(x) if i != j)
+                end
+            else
+                for i in 1:length(x)
+                    g[i] = total / x[i]
+                end
             end
         end
     elseif op == :^
