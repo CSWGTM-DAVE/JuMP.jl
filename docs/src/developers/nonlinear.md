@@ -429,7 +429,7 @@ This section does not attempt to explain how sparse reverse-mode AD works, but
 instead explains why JuMP contains it's own implementation, and highlights
 notable differences from similar packages.
 
-!!! warn
+!!! warning
     You should not interact with `ReverseAD` directly. Instead, you should
     create a [`Nonlinear.NonlinearData`](@ref) object, call
     [`Nonlinear.set_differentiation_backend`](@ref) with
@@ -442,16 +442,16 @@ for doing AD in Julia. At last count, there were at least ten packages–not
 including `ReverseAD`–for reverse-mode AD in Julia. Given this multitude, why
 does JuMP maintain another implementation instead of re-using existing tooling?
 
-Here are three reasons:
+Here are four reasons:
 
- * **Scale and Sparsity:** the types of functions that JuMP requires derivatives
-   for have two key characteristics: they are very large scale (10^5 or more
+ * **Scale and Sparsity:** the types of functions that JuMP computes derivatives
+   of have two key characteristics: they can be very large scale (10^5 or more
    functions across 10^5 or more variables) and they are very sparse. For large
-   problems, it is common for the hessian to have O(n) non-zero elements instead
-   of O(n^2) if it was dense. To the best of our knowledge, `ReverseAD` is the
-   only reverse-mode AD system in Julia that handles sparsity by default. The
-   lack of sparsity support is _the_ main reason why we do not use a generic
-   package.
+   problems, it is common for the hessian to have `O(n)` non-zero elements
+   instead of `O(n^2)` if it was dense. To the best of our knowledge,
+   `ReverseAD` is the only reverse-mode AD system in Julia that handles sparsity
+   by default. The lack of sparsity support is _the_ main reason why we do no
+   use a generic package.
  * **Limited scope:** most other AD packages accept arbitrary Julia functions as
    input and then trace an expression graph using operator overloading. This
    means they must deal (or detect and ignore) with control flow, I/O, and other
@@ -465,9 +465,12 @@ Here are three reasons:
    packages started development. Because we had a well-tested, working AD in
    JuMP, there was less motivation to contribute to and explore other AD
    packages. The lack of historical interaction also meant that other packages
-   were not optimized for the types of problems that JuMP requires (i.e.,
+   were not optimized for the types of problems that JuMP is built for (i.e.,
    large-scale sparse problems).
-
-However, the main motivation for refactoring JuMP to create the `Nonlinear`
-submodule is to abstract the interface between JuMP and the AD system, allowing
-us to swap-in and test new AD systems in the future.
+ * **Technical debt** Prior to the introduction of `Nonlinear`, JuMP's nonlinear
+   implementation was a confusing mix of functions and types spread across the
+   code base and in the private `_Derivatives` submodule. This made it hard to
+   swap the AD system for another. The main motivation for refactoring JuMP to
+   create the `Nonlinear` submodule was to abstract the interface between JuMP
+   and the AD system, allowing us to swap-in and test new AD systems in the
+   future.
