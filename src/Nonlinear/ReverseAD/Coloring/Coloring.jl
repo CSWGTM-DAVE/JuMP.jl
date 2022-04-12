@@ -516,9 +516,8 @@ function seed_matrix(rinfo::RecoveryInfo)
 end
 
 function prepare_seed_matrix!(R, rinfo::RecoveryInfo)
-    N = length(rinfo.color) # number of local variables
-    @assert N == length(rinfo.local_indices)
-    @assert size(R, 1) == N
+    N = length(rinfo.color)
+    @assert N == size(R, 1) == length(rinfo.local_indices)
     @assert size(R, 2) == rinfo.num_colors
     fill!(R, 0.0)
     for i in 1:N
@@ -529,49 +528,41 @@ end
 
 # recover the hessian values from the hessian-matrix solution
 # stored_values is a temporary vector of length >= length(rinfo.local_indices)
-function recover_from_matmat!(V, R, rinfo::RecoveryInfo, stored_values)
+function recover_from_matmat!(
+    V::AbstractVector{T},
+    R::AbstractMatrix{T},
+    rinfo::RecoveryInfo,
+    stored_values::AbstractVector{T},
+) where {T}
     N = length(rinfo.color) # number of local variables
-    nnz = rinfo.nnz
-
-    @assert length(V) == nnz + N
+    @assert length(V) == rinfo.nnz + N
     @assert length(stored_values) >= length(rinfo.local_indices)
-
-    # diagonal entries
     k = 0
-
     for i in 1:N
         k += 1
         V[k] = R[i, rinfo.color[i]]
     end
-
     for t in 1:length(rinfo.vertexmap)
         vmap = rinfo.vertexmap[t]
         order = rinfo.postorder[t]
         parent = rinfo.parents[t]
-
         for z in 1:length(order)
             @inbounds stored_values[z] = 0.0
         end
-
         @inbounds for z in 1:length(order)
-            v = order[z]
-            p = parent[v]
-            (p == 0) && continue
-
-            i = vmap[v]
-            j = vmap[p]
-
+            v, p = order[z], parent[v]
+            if p == 0
+                continue
+            end
+            i, j = vmap[v], vmap[p]
             value = R[i, rinfo.color[j]] - stored_values[v]
             stored_values[p] += value
-
             k += 1
             V[k] = value
         end
     end
-
-    @assert k == nnz + N
-
+    @assert k == rinfo.nnz + N
     return
 end
 
-end
+end  # module

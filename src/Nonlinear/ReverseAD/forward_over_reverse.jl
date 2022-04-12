@@ -113,7 +113,9 @@ function _eval_hessian_inner(
         ex.rinfo,
         d.output_ϵ,
     )
-    _rmul!(output_slice, scale)
+    for i in 1:length(output_slice)
+        output_slice[i] *= scale
+    end
     return length(ex.hess_I)
 end
 
