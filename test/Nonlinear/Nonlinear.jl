@@ -390,7 +390,7 @@ function test_auto_register()
     r = Nonlinear.OperatorRegistry()
     f(x, y) = x + y
     @test_throws ErrorException Nonlinear.assert_registered(r, :f, 2)
-    @test_logs (:warn,) Nonlinear.register_if_needed(r, :f, 2, f)
+    @test_logs (:warn,) Nonlinear.register_operator_if_needed(r, :f, 2, f)
     Nonlinear.assert_registered(r, :f, 2)
     return
 end
@@ -592,7 +592,7 @@ function test_eval_comprison_function()
         @test Nonlinear.eval_comparison_function(r, :>, lhs, rhs) == (lhs > rhs)
         @test_throws(
             AssertionError,
-            Nonlinear.eval_comparison_function(:⊻, lhs, rhs),
+            Nonlinear.eval_comparison_function(r, :⊻, lhs, rhs),
         )
     end
     return
