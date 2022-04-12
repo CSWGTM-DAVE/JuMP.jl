@@ -15,6 +15,26 @@ function runtests()
     return
 end
 
+function test_copy()
+    data = Nonlinear.NonlinearData()
+    @test_throws(
+        ErrorException("Copying nonlinear problems not yet implemented"),
+        copy(data),
+    )
+    return
+end
+
+function test_parse_unable()
+    data = Nonlinear.NonlinearData()
+    x = MOI.VariableIndex(1)
+    input = :(f($x))
+    @test_throws(
+        ErrorException("Unable to parse: $input"),
+        Nonlinear.set_objective(data, input),
+    )
+    return
+end
+
 function test_parse_sin()
     data = Nonlinear.NonlinearData()
     x = MOI.VariableIndex(1)
@@ -631,6 +651,10 @@ function test_add_constraint_rows()
     @test MOI.is_valid(data, constraints[2])
     @test Nonlinear.row(data, constraints[2]) == 1
     @test !MOI.is_valid(data, constraints[3])
+    @test_throws(
+        ErrorException("Invalid constraint index $(constraints[3])"),
+        Nonlinear.row(data, constraints[3]),
+    )
     @test MOI.is_valid(data, constraints[4])
     @test Nonlinear.row(data, constraints[4]) == 2
     return
@@ -639,6 +663,25 @@ end
 function test_show()
     data = Nonlinear.NonlinearData()
     @test occursin(":ExprGraph", sprint(show, data))
+    return
+end
+
+function test_evaluate_comparison()
+    data = Nonlinear.NonlinearData()
+    x = MOI.VariableIndex(1)
+    ex = Nonlinear.add_expression(data, :(ifelse($x < 1, -1.0, 1.0)))
+    @test Nonlinear.evaluate(Dict(x => 1.1), data, ex) == 1.0
+    @test Nonlinear.evaluate(Dict(x => 0.9), data, ex) == -1.0
+    return
+end
+
+function test_evaluate_logic()
+    data = Nonlinear.NonlinearData()
+    x = MOI.VariableIndex(1)
+    ex = Nonlinear.add_expression(data, :(ifelse($x < 0 || $x > 1, -1.0, 1.0)))
+    @test Nonlinear.evaluate(Dict(x => 1.1), data, ex) == -1.0
+    @test Nonlinear.evaluate(Dict(x => 0.9), data, ex) == 1.0
+    @test Nonlinear.evaluate(Dict(x => -0.9), data, ex) == -1.0
     return
 end
 
