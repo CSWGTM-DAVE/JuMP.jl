@@ -26,25 +26,31 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-mutable struct TopologicalSortVisitor
+mutable struct _TopologicalSortVisitor
     vertices::Vector{Int}
     parents::Vector{Int}
 
-    function TopologicalSortVisitor(n::Int)
+    function _TopologicalSortVisitor(n::Int)
         vs = Int[]
         sizehint!(vs, n)
         return new(vs, zeros(Int, n))
     end
 end
 
-function depth_first_visit_impl!(
+function _traverse_graph(
     adjlist,
     offsets,
-    vertex_stack,                   # an (initialized) stack of vertex
-    index_stack,                    # stack with out edge indices
-    vertexcolormap::Vector{Int},    # an (initialized) color-map to indicate status of vertices
-    visitor::TopologicalSortVisitor,
+    s,
+    visitor::_TopologicalSortVisitor,
+    vertexcolormap,
+    vertex_stack,
+    index_stack,
 )
+    vertexcolormap[s] = 1
+    resize!(vertex_stack, 1)
+    vertex_stack[1] = s
+    resize!(index_stack, 1)
+    index_stack[1] = 1
     while !isempty(vertex_stack)
         u = pop!(vertex_stack)
         out_idx = pop!(index_stack)
@@ -65,39 +71,11 @@ function depth_first_visit_impl!(
             end
         end
         if !found_new_vertex
-            close_vertex!(visitor, u)
+            push!(visitor.vertices, u)
             vertexcolormap[u] = 2
         end
     end
     return
-end
-
-function traverse_graph(
-    adjlist,
-    offsets,
-    s,
-    visitor::TopologicalSortVisitor,
-    vertexcolormap,
-    vertex_stack,
-    index_stack,
-)
-    vertexcolormap[s] = 1
-    resize!(vertex_stack, 1)
-    vertex_stack[1] = s
-    resize!(index_stack, 1)
-    index_stack[1] = 1
-    return depth_first_visit_impl!(
-        adjlist,
-        offsets,
-        vertex_stack,
-        index_stack,
-        vertexcolormap,
-        visitor,
-    )
-end
-
-function close_vertex!(visitor::TopologicalSortVisitor, v::Int)
-    return push!(visitor.vertices, v)
 end
 
 function reverse_topological_sort_by_dfs(
@@ -110,10 +88,10 @@ function reverse_topological_sort_by_dfs(
 )
     @assert length(cmap) == num_vertices
     fill!(cmap, 0)
-    visitor = TopologicalSortVisitor(num_vertices)
+    visitor = _TopologicalSortVisitor(num_vertices)
     for s in 1:num_vertices
         if cmap[s] == 0
-            traverse_graph(
+            _traverse_graph(
                 adjlist,
                 offsets,
                 s,

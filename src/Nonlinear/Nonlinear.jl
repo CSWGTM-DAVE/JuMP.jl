@@ -170,20 +170,23 @@ end
 function MOI.initialize(data::NonlinearData, features::Vector{Symbol})
     empty!(data.ordered_constraints)
     empty!(data.julia_expressions)
-    append!(data.ordered_constraints, keys(data.constraints))
-    for i in 1:length(data.expressions)
-        push!(
-            data.julia_expressions,
-            _to_expr(data, data.expressions[i]; use_x_ref = true),
-        )
-    end
     data.eval_objective_timer = 0.0
     data.eval_objective_gradient_timer = 0.0
     data.eval_constraint_timer = 0.0
     data.eval_constraint_jacobian_timer = 0.0
     data.eval_hessian_lagrangian_timer = 0.0
+    append!(data.ordered_constraints, keys(data.constraints))
+    if :ExprGraph in features
+        for i in 1:length(data.expressions)
+            push!(
+                data.julia_expressions,
+                _to_expr(data, data.expressions[i]; use_x_ref = true),
+            )
+        end
+        filter!(f -> f != :ExprGraph, features)
+    end
     if data.inner !== nothing
-        MOI.initialize(data.inner, filter(f -> f != :ExprGraph, features))
+        MOI.initialize(data.inner, features)
     end
     return
 end
@@ -304,18 +307,44 @@ function adjacency_matrix(nodes::Vector{Node})
     return SparseArrays.sparse(I, J, ones(Bool, numnz), N, N)
 end
 
+"""
+    evaluate(
+        f::AbstractDict,
+        data::NonlinearData,
+        index::ExpressionIndex,
+    )
+
+Evaluate the nonlinear expression `index`, where `f[x]` returns the primal value
+of decision variable `x::MOI.VariableIndex`.
+"""
 function evaluate(
     f::AbstractDict,
     data::NonlinearData,
     index::ExpressionIndex;
+    kwargs...
+)
+    return evaluate(f, data, data[index]; kwargs...)
+end
+
+"""
+    evaluate(
+        f::AbstractDict,
+        data::NonlinearData,
+        expr::NonlinearExpression,
+    )
+
+Evaluate the nonlinear expression `expr`, where `f[x]` returns the primal value
+of decision variable `x::MOI.VariableIndex`.
+"""
+function evaluate(
+    f::AbstractDict,
+    data::NonlinearData,
+    expr::NonlinearExpression;
     evaluated_expressions = Dict{Int,Float64}(),
 )
-    expr = data[index]
     storage = zeros(length(expr.nodes))
-
     adj = adjacency_matrix(expr.nodes)
     children_arr = SparseArrays.rowvals(adj)
-    operators = data.operators
     # An arbitrary limit on the potential input size of a multivariate
     # operation. This will get resized if need-be.
     input_cache = zeros(10)
@@ -348,15 +377,15 @@ function evaluate(
                 f_input[r] = storage[children_arr[i]]
             end
             storage[k] = eval_multivariate_function(
-                operators,
-                operators.multivariate_operators[node.index],
+                data.operators,
+                data.operators.multivariate_operators[node.index],
                 f_input,
             )
         elseif node.type == NODE_CALL_UNIVARIATE
             child_idx = children_arr[adj.colptr[k]]
             storage[k] = eval_univariate_function(
-                operators,
-                operators.univariate_operators[node.index],
+                data.operators,
+                data.operators.univariate_operators[node.index],
                 storage[child_idx],
             )
         elseif node.type == NODE_COMPARISON
@@ -366,8 +395,8 @@ function evaluate(
                 lhs = children_arr[children_idx[r-1]]
                 rhs = children_arr[children_idx[r]]
                 result &= eval_comparison_function(
-                    operators,
-                    operators.comparison_operators[node.index],
+                    data.operators,
+                    data.operators.comparison_operators[node.index],
                     storage[lhs],
                     storage[rhs],
                 )
@@ -379,8 +408,8 @@ function evaluate(
             lhs = children_arr[children_idx[1]]
             rhs = children_arr[children_idx[2]]
             storage[k] = eval_logic_function(
-                operators,
-                operators.logic_operators[node.index],
+                data.operators,
+                data.operators.logic_operators[node.index],
                 storage[lhs] == 1,
                 storage[rhs] == 1,
             )

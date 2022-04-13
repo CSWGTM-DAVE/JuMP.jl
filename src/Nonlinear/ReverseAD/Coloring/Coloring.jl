@@ -61,13 +61,13 @@ struct UndirectedGraph
     edges::Vector{Tuple{Int,Int}}
 end
 
-num_vertices(g::UndirectedGraph) = length(g.offsets) - 1
+_num_vertices(g::UndirectedGraph) = length(g.offsets) - 1
 
-num_edges(g::UndirectedGraph) = length(g.edges)
+_num_edges(g::UndirectedGraph) = length(g.edges)
 
-num_neighbors(i::Int, g::UndirectedGraph) = g.offsets[i+1] - g.offsets[i]
+_num_neighbors(i::Int, g::UndirectedGraph) = g.offsets[i+1] - g.offsets[i]
 
-start_neighbors(i::Int, g::UndirectedGraph) = g.offsets[i]
+_start_neighbors(i::Int, g::UndirectedGraph) = g.offsets[i]
 
 function gen_adjlist(I, J, nel)
     adjcount = zeros(Int, nel)
@@ -111,13 +111,13 @@ function gen_adjlist(I, J, nel)
     return UndirectedGraph(adjlist, edgeindex, offsets, edges)
 end
 
-struct Edge
+struct _Edge
     index::Int
     source::Int
     target::Int
 end
 
-function prevent_cycle(
+function _prevent_cycle(
     v,
     w,
     x,
@@ -133,25 +133,25 @@ function prevent_cycle(
     p = first.source # but this depends on the order?
     q = first.target
     @inbounds if p != v
-        firstVisitToTree[er] = Edge(e_idx1, v, w)
+        firstVisitToTree[er] = _Edge(e_idx1, v, w)
     elseif q != w
         forbiddenColors[color[x]] = v
     end
     return
 end
 
-function grow_star(v, w, e_idx, firstNeighbor, color, S)
+function _grow_star(v, w, e_idx, firstNeighbor, color, S)
     @inbounds e = firstNeighbor[color[w]]
     p = e.source
     @inbounds if p != v
-        firstNeighbor[color[w]] = Edge(e_idx, v, w)
+        firstNeighbor[color[w]] = _Edge(e_idx, v, w)
     else
         union!(S, e_idx, e.index)
     end
     return
 end
 
-function merge_trees(eg, eg1, S)
+function _merge_trees(eg, eg1, S)
     e1 = DataStructures.find_root!(S, eg)
     e2 = DataStructures.find_root!(S, eg1)
     if e1 != e2
@@ -160,23 +160,30 @@ function merge_trees(eg, eg1, S)
     return
 end
 
-# acyclic coloring algorithm of Gebremdehin, Tarafdar, Manne, and Pothen
-# "New Acyclic and Star Coloring Algorithms with Application to Computing Hessians"
-# SIAM J. Sci. Comput. 2007
+"""
+    acyclic_coloring(g::UndirectedGraph)
+
+Implement the acyclic coloring algorithm of Gebremdehin, Tarafdar, Manne, and
+Pothen, "New Acyclic and Star Coloring Algorithms with Application to Computing
+Hessians." SIAM J. Sci. Comput. 2007.
+
+Returns `Tuple{Vector{Int},Int}` giving the color index of each node in `g`, as
+well as the total number of colors used.
+"""
 function acyclic_coloring(g::UndirectedGraph)
-    if num_edges(g) == 0
-        return fill(1, num_vertices(g)), 1
+    if _num_edges(g) == 0
+        return fill(1, _num_vertices(g)), 1
     end
     num_colors = 0
     forbiddenColors = Int[]
-    firstNeighbor = Edge[]
-    firstVisitToTree = fill(Edge(0, 0, 0), num_edges(g))
-    color = fill(0, num_vertices(g))
+    firstNeighbor = _Edge[]
+    firstVisitToTree = fill(_Edge(0, 0, 0), _num_edges(g))
+    color = fill(0, _num_vertices(g))
     # disjoint set forest of edges in the graph
-    S = DataStructures.IntDisjointSets(num_edges(g))
-    @inbounds for v in 1:num_vertices(g)
-        n_neighbor = num_neighbors(v, g)
-        start_neighbor = start_neighbors(v, g)
+    S = DataStructures.IntDisjointSets(_num_edges(g))
+    @inbounds for v in 1:_num_vertices(g)
+        n_neighbor = _num_neighbors(v, g)
+        start_neighbor = _start_neighbors(v, g)
         for k in 0:(n_neighbor-1)
             w = g.adjlist[start_neighbor+k]
             if color[w] == 0
@@ -190,8 +197,8 @@ function acyclic_coloring(g::UndirectedGraph)
             if color[w] == 0
                 continue
             end
-            n_neighbor_w = num_neighbors(w, g)
-            start_neighbor_w = start_neighbors(w, g)
+            n_neighbor_w = _num_neighbors(w, g)
+            start_neighbor_w = _start_neighbors(w, g)
             for k2 in 0:(n_neighbor_w-1)
                 x = g.adjlist[start_neighbor_w+k2]
                 e2_idx = g.edgeindex[start_neighbor_w+k2]
@@ -199,7 +206,7 @@ function acyclic_coloring(g::UndirectedGraph)
                     continue
                 end
                 if forbiddenColors[color[x]] != v
-                    prevent_cycle(
+                    _prevent_cycle(
                         v,
                         w,
                         x,
@@ -225,7 +232,7 @@ function acyclic_coloring(g::UndirectedGraph)
         if !found
             num_colors += 1
             push!(forbiddenColors, 0)
-            push!(firstNeighbor, Edge(0, 0, 0))
+            push!(firstNeighbor, _Edge(0, 0, 0))
             color[v] = num_colors
         end
         for k in 0:(n_neighbor-1)
@@ -234,7 +241,7 @@ function acyclic_coloring(g::UndirectedGraph)
             if color[w] == 0
                 continue
             end
-            grow_star(v, w, e_idx, firstNeighbor, color, S)
+            _grow_star(v, w, e_idx, firstNeighbor, color, S)
         end
         for k in 0:(n_neighbor-1)
             w = g.adjlist[start_neighbor+k]
@@ -242,8 +249,8 @@ function acyclic_coloring(g::UndirectedGraph)
             if color[w] == 0
                 continue
             end
-            n_neighbor_w = num_neighbors(w, g)
-            start_neighbor_w = start_neighbors(w, g)
+            n_neighbor_w = _num_neighbors(w, g)
+            start_neighbor_w = _start_neighbors(w, g)
             for k2 in 0:(n_neighbor_w-1)
                 x = g.adjlist[start_neighbor_w+k2]
                 e2_idx = g.edgeindex[start_neighbor_w+k2]
@@ -251,7 +258,7 @@ function acyclic_coloring(g::UndirectedGraph)
                     continue
                 end
                 if color[x] == color[v]
-                    merge_trees(e_idx, e2_idx, S)
+                    _merge_trees(e_idx, e2_idx, S)
                 end
             end
         end
@@ -325,8 +332,8 @@ function recovery_preprocess(
     postorder = Array{Vector{Int}}(undef, seen_twocolors)
     parents = Array{Vector{Int}}(undef, seen_twocolors)
     # temporary lookup map from global index to subgraph index
-    revmap = zeros(Int, num_vertices(g))
-    adjcount = zeros(Int, num_vertices(g))
+    revmap = zeros(Int, _num_vertices(g))
+    adjcount = zeros(Int, _num_vertices(g))
     cmap = zeros(Int, 0) # shared storage for DFS
     for idx in 1:seen_twocolors
         my_edges = sorted_edges[idx]
@@ -385,14 +392,14 @@ function recovery_preprocess(
         parents,
         color,
         num_colors,
-        num_edges(g),
+        _num_edges(g),
         local_indices,
     )
 end
 
 _normalize(i, j) = (j > i) ? (j, i) : (i, j)
 
-function indirect_recover_structure(rinfo::RecoveryInfo)
+function _indirect_recover_structure(rinfo::RecoveryInfo)
     N = length(rinfo.color)
     I = zeros(Int, rinfo.nnz + N)
     J = zeros(Int, rinfo.nnz + N)
@@ -419,7 +426,15 @@ function indirect_recover_structure(rinfo::RecoveryInfo)
     return I, J
 end
 
-# edgelist is nonzeros in hessian, *including* nonzeros on the diagonal
+"""
+    hessian_color_preprocess(
+        edgelist,
+        num_total_var,
+        seen_idx = IndexedSet(0),
+    )
+
+edgelist is nonzeros in hessian, *including* nonzeros on the diagonal
+"""
 function hessian_color_preprocess(
     edgelist,
     num_total_var,
@@ -446,9 +461,9 @@ function hessian_color_preprocess(
     end
     g = gen_adjlist(I, J, length(local_indices))
     color, num_colors = acyclic_coloring(g)
-    @assert length(color) == num_vertices(g)
+    @assert length(color) == _num_vertices(g)
     rinfo = recovery_preprocess(g, color, num_colors, local_indices)
-    I, J = indirect_recover_structure(rinfo)
+    I, J = _indirect_recover_structure(rinfo)
     # convert back to global indices
     for k in 1:length(I)
         I[k] = local_indices[I[k]]
@@ -457,11 +472,18 @@ function hessian_color_preprocess(
     return I, J, rinfo
 end
 
-# allocate a seed matrix
+"""
+    seed_matrix(rinfo::RecoveryInfo)
+
+Allocate a seed matrix for the Coloring.
+"""
 function seed_matrix(rinfo::RecoveryInfo)
     return Array{Float64}(undef, length(rinfo.local_indices), rinfo.num_colors)
 end
 
+"""
+    prepare_seed_matrix!(R, rinfo::RecoveryInfo)
+"""
 function prepare_seed_matrix!(R, rinfo::RecoveryInfo)
     N = length(rinfo.color)
     @assert N == size(R, 1) == length(rinfo.local_indices)
@@ -473,8 +495,17 @@ function prepare_seed_matrix!(R, rinfo::RecoveryInfo)
     return
 end
 
-# recover the hessian values from the hessian-matrix solution
-# stored_values is a temporary vector of length >= length(rinfo.local_indices)
+"""
+    recover_from_matmat!(
+        V::AbstractVector{T},
+        R::AbstractMatrix{T},
+        rinfo::RecoveryInfo,
+        stored_values::AbstractVector{T},
+    ) where {T}
+
+recover the hessian values from the hessian-matrix solution
+stored_values is a temporary vector of length >= length(rinfo.local_indices)
+"""
 function recover_from_matmat!(
     V::AbstractVector{T},
     R::AbstractMatrix{T},
