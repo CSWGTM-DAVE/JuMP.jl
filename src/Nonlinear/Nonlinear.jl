@@ -321,7 +321,7 @@ function evaluate(
     f::AbstractDict,
     data::NonlinearData,
     index::ExpressionIndex;
-    kwargs...
+    kwargs...,
 )
     return evaluate(f, data, data[index]; kwargs...)
 end

@@ -508,11 +508,8 @@ function eval_multivariate_function(
     if op == :+
         return sum(x; init = zero(T))
     elseif op == :-
-        ret = x[1]
-        for i in 2:length(x)
-            ret -= x[i]
-        end
-        return ret
+        @assert length(x) == 2
+        return x[1] - x[2]
     elseif op == :*
         return prod(x; init = one(T))
     elseif op == :^
@@ -555,18 +552,18 @@ function eval_multivariate_gradient(
     if op == :+
         fill!(g, one(T))
     elseif op == :-
-        fill!(g, -one(T))
         g[1] = one(T)
+        g[2] = -one(T)
     elseif op == :*
         # Special case performance optimizations for common cases.
         if length(x) == 1
-            g[1] = T(1)
+            g[1] = one(T)
         elseif length(x) == 2
             g[1] = x[2]
             g[2] = x[1]
         else
             total = prod(x)
-            if total == zero(T)
+            if iszero(total)
                 for i in 1:length(x)
                     g[i] = prod(x[j] for j in 1:length(x) if i != j)
                 end
@@ -578,15 +575,15 @@ function eval_multivariate_gradient(
         end
     elseif op == :^
         @assert length(x) == 2
-        if x[2] == 1
+        if x[2] == one(T)
             g[1] = one(T)
-        elseif x[2] == 2
+        elseif x[2] == T(2)
             g[1] = T(2) * x[1]
         else
             g[1] = x[2] * x[1]^(x[2] - one(T))
         end
         # TODO(odow): fix me. We should use NaNMath.jl here
-        if x[1] < 0
+        if x[1] < zero(T)
             g[2] = T(NaN)
         else
             g[2] = x[1]^x[2] * log(x[1])
