@@ -214,7 +214,7 @@ function test_parameter_set()
     p = Nonlinear.add_parameter(data, 1.2)
     @test data.parameters == [1.2]
     @test data[p] == 1.2
-    Nonlinear.set_parameter(data, p, 2.1)
+    data[p] = 2.1
     @test data.parameters == [2.1]
     @test data[p] == 2.1
     return

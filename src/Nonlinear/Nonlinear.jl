@@ -23,7 +23,19 @@ include("parse.jl")
 include("ReverseAD/ReverseAD.jl")
 
 """
-    set_objective(data::NonlinearData, obj)
+    set_objective(data::NonlinearData, obj)::Nothing
+
+Parse `obj` into a `NonlinearExpression` and set as the objective function of
+`data`.
+
+## Examples
+
+```julia
+data = NonlinearData()
+x = MOI.VariableIndex(1)
+set_objective(data, :(\$x^2 + 1))
+set_objective(data, x)
+```
 """
 function set_objective(data::NonlinearData, obj)
     data.objective = parse_expression(data, obj)
@@ -31,15 +43,43 @@ function set_objective(data::NonlinearData, obj)
 end
 
 """
-    add_expression(data::NonlinearData, expr)
+    add_expression(data::NonlinearData, expr)::ExpressionIndex
+
+Parse `expr` into a `NonlinearExpression` and add to `data`. Returns an
+`ExpressionIndex` that can be interpolated into other input expressions.
+
+## Examples
+
+```julia
+data = NonlinearData()
+x = MOI.VariableIndex(1)
+ex = add_expression(data, :(\$x^2 + 1))
+set_objective(data, :(sqrt(\$ex)))
+```
 """
 function add_expression(data::NonlinearData, expr)
     push!(data.expressions, parse_expression(data, expr))
     return ExpressionIndex(length(data.expressions))
 end
 
+function Base.getindex(data::NonlinearData, index::ExpressionIndex)
+    return data.expressions[index.value]
+end
+
 """
-    add_constraint(data::NonlinearData, expr::Expr)
+    add_constraint(data::NonlinearData, input::Expr)::ConstraintIndex
+
+Parse `input` into a `NonlinearConstraint` and add to `data`. Returns an
+`ConstraintIndex` that can be used to delete the constraint or query solution
+information.
+
+## Examples
+
+```julia
+data = NonlinearData()
+x = MOI.VariableIndex(1)
+c = add_constraint(data, :(\$x^2 <= 1))
+```
 """
 function add_constraint(data::NonlinearData, input::Expr)
     expr, set = _expr_to_constraint(input)
@@ -51,14 +91,39 @@ function add_constraint(data::NonlinearData, input::Expr)
 end
 
 """
-    delete(data::NonlinearData, c::ConstraintIndex)
+    delete(data::NonlinearData, c::ConstraintIndex)::Nothing
+
+Delete the constraint index `c` from `data`.
+
+## Examples
+
+```julia
+data = NonlinearData()
+x = MOI.VariableIndex(1)
+c = add_constraint(data, :(\$x^2 <= 1))
+delete(data, c)
+```
 """
 function delete(data::NonlinearData, c::ConstraintIndex)
     delete!(data.constraints, c)
     return
 end
 
-function row(data::NonlinearData, index::ConstraintIndex)
+"""
+    row(data::NonlinearData, c::ConstraintIndex)::Int
+
+Return the row of the constraint index `c` in `data`.
+
+## Examples
+
+```julia
+data = NonlinearData()
+x = MOI.VariableIndex(1)
+c = add_constraint(data, :(\$x^2 <= 1))
+row(data, c)  # Returns 1
+```
+"""
+function row(data::NonlinearData, c::ConstraintIndex)
     # TODO(odow): replace with a cache that maps indices to their 1-indexed
     # row in the constraint matrix. But failing that, since we know that
     # constraints are added in increasing order and that they can be deleted, we
@@ -67,27 +132,48 @@ function row(data::NonlinearData, index::ConstraintIndex)
     # In the typical case with no deletion, there should be no overhead.
     start_index = min(index.value, length(data.ordered_constraints))
     for i in start_index:-1:1
-        if data.ordered_constraints[i] == index
+        if data.ordered_constraints[i] == c
             return i
         end
     end
-    return error("Invalid constraint index $(index)")
+    return error("Invalid constraint index $(c)")
+end
+
+function Base.getindex(data::NonlinearData, index::ConstraintIndex)
+    return data.constraints[index]
+end
+
+function MOI.is_valid(data::NonlinearData, index::ConstraintIndex)
+    return haskey(data.constraints, index)
 end
 
 """
-    add_parameter(data::NonlinearData, value::Float64)
+    add_parameter(data::NonlinearData, value::Float64)::ParameterIndex
+
+Add a new parameter to `data` with the default value `value`. Returns a
+`ParameterIndex` that can be interpolated into other input expressions and used
+to modify the value of the parameter.
+
+## Examples
+
+```julia
+data = NonlinearData()
+x = MOI.VariableIndex(1)
+p = add_parameter(data, 1.2)
+c = add_constraint(data, :(\$x^2 <= \$p))
+```
 """
 function add_parameter(data::NonlinearData, value::Float64)
     push!(data.parameters, value)
     return ParameterIndex(length(data.parameters))
 end
 
-"""
-    set_parameter(data::NonlinearData, p::ParameterIndex, value::Float64)
-"""
-function set_parameter(data::NonlinearData, p::ParameterIndex, value::Float64)
-    data.parameters[p.value] = value
-    return
+function Base.getindex(data::NonlinearData, p::ParameterIndex)
+    return data.parameters[p.value]
+end
+
+function Base.setindex!(data::NonlinearData, value::Real, p::ParameterIndex)
+    return data.parameters[p.value] = convert(Float64, value)::Float64
 end
 
 """
@@ -96,24 +182,33 @@ end
         op::Symbol,
         nargs::Int,
         f::Function,
+        [∇f::Function],
+        [∇²f::Function],
     )
 
-    register_operator(
-        data::NonlinearData,
-        op::Symbol,
-        nargs::Int,
-        f::Function,
-        ∇f::Function,
-    )
+Register the user-defined operator `op` with `nargs` input arguments in `data`.
 
-    register_operator(
-        data::NonlinearData,
-        op::Symbol,
-        nargs::Int,
-        f::Function,
-        ∇f::Function,
-        ∇²f::Function,
-    )
+## Univariate functions
+
+ * `f(x::T)::T` must be a function that takes a single input argument `x` and
+   returns the function evaluated at `x`. If `∇f` and `∇²f` are not provided,
+   `f` must support any `Real` input type `T`.
+ * `∇f(x::T)::T` is a function that takes a single input argument `x` and
+   returns the first derivative of `f` with respect to `x`. If `∇²f` is not
+   provided, `∇f` must support any `Real` input type `T`.
+ * `∇²f(x::T)::T` is a function that takes a single input argument `x` and
+   returns the second derivative of `f` with respect to `x`.
+
+## Multivariate functions
+
+* `f(x::T...)::T` must be a function that takes a `nargs` input arguments `x`
+  and returns the function evaluated at `x`. If `∇f` and `∇²f` are not provided,
+  `f` must support any `Real` input type `T`.
+* `∇f(g::AbstractVector{T}, x::T...)::T` is a function that takes a cache vector
+  `g` of length `length(x)`, and fills each element `g[i]` with the partial
+  derivative of `f` with respect to `x[i]`.
+
+Hessian are not supported for multivariate functions.
 """
 function register_operator(
     data::NonlinearData,
@@ -124,28 +219,8 @@ function register_operator(
     return register_operator(data.operators, op, nargs, f...)
 end
 
-function Base.getindex(data::NonlinearData, index::ParameterIndex)
-    return data.parameters[index.value]
-end
-
-function Base.setindex!(data::NonlinearData, value::Real, index::ParameterIndex)
-    return data.parameters[index.value] = value
-end
-
-function Base.getindex(data::NonlinearData, index::ExpressionIndex)
-    return data.expressions[index.value]
-end
-
-function Base.getindex(data::NonlinearData, index::ConstraintIndex)
-    return data.constraints[index]
-end
-
 function Base.copy(::NonlinearData)
     return error("Copying nonlinear problems not yet implemented")
-end
-
-function MOI.is_valid(data::NonlinearData, index::ConstraintIndex)
-    return haskey(data.constraints, index)
 end
 
 function MOI.features_available(data::NonlinearData)

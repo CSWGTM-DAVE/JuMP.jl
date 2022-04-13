@@ -19,7 +19,6 @@ Nonlinear.add_expression
 ```@docs
 Nonlinear.ParameterIndex
 Nonlinear.add_parameter
-Nonlinear.set_parameter
 ```
 
 ## [Objectives](@id nonlinear_api_objectives)

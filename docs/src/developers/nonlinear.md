@@ -81,9 +81,16 @@ JuMP.Nonlinear.ParameterIndex(1)
 The return value, `p`, is a [`Nonlinear.ParameterIndex`](@ref) that can then be
 interpolated into other input expressions.
 
-Update a parameter using [`Nonlinear.set_parameter`](@ref):
+Update a parameter as follows:
 ```jldoctest nonlinear_developer
-julia> Nonlinear.set_parameter(data, p, 4.56)
+julia> data[p]
+1.23
+
+julia> data[p] = 4.56
+4.56
+
+julia> data[p]
+4.56
 ```
 
 ### [Objectives](@id Nonlinear_Objectives)
