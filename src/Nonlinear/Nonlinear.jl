@@ -130,8 +130,7 @@ function row(data::NonlinearData, c::ConstraintIndex)
     # know that index `i` must appear as constraint `1` to `i`. So we start at
     # `i` and backtrack (to account for deleted constraints) until we find it.
     # In the typical case with no deletion, there should be no overhead.
-    start_index = min(index.value, length(data.ordered_constraints))
-    for i in start_index:-1:1
+    for i in min(c.value, length(data.ordered_constraints)):-1:1
         if data.ordered_constraints[i] == c
             return i
         end
